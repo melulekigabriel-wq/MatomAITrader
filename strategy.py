@@ -1,72 +1,75 @@
-import requests
-
-# -------------------------
-# LIVE CRYPTO PRICE
-# -------------------------
-def get_crypto_price(symbol="BTCUSDT"):
-    url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
-    return float(requests.get(url).json()["price"])
+import yfinance as yf
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
 
 
-# -------------------------
-# SIMPLE AI SCORING ENGINE
-# -------------------------
-def ai_score(price):
-    """
-    Fake but structured AI logic:
-    We simulate "market pressure scoring"
-    """
+# -----------------------------
+# GET MARKET DATA
+# -----------------------------
+def get_data(symbol="BTC-USD"):
+    data = yf.download(symbol, period="6mo", interval="1d")
+    data = data.dropna()
 
-    score = 0
+    data["Target"] = (data["Close"].shift(-1) > data["Close"]).astype(int)
 
-    # randomness-based trend simulation (temporary AI behavior)
-    if price % 2 < 1:
-        score += 2
+    return data
+
+
+# -----------------------------
+# TRAIN MODEL
+# -----------------------------
+def train_model(data):
+    features = ["Open", "High", "Low", "Close", "Volume"]
+
+    X = data[features][:-1]
+    y = data["Target"][:-1]
+
+    model = RandomForestClassifier(n_estimators=100)
+    model.fit(X, y)
+
+    return model
+
+
+# -----------------------------
+# PREDICT SIGNAL
+# -----------------------------
+def predict_signal(symbol="BTC-USD"):
+    data = get_data(symbol)
+
+    model = train_model(data)
+
+    latest = data[["Open", "High", "Low", "Close", "Volume"]].iloc[-1].values.reshape(1, -1)
+
+    prediction = model.predict(latest)[0]
+
+    price = data["Close"].iloc[-1]
+
+    if prediction == 1:
+        return f"{symbol} {price:.2f} → BUY 📈 (AI Prediction)"
     else:
-        score -= 1
-
-    if price % 5 < 2:
-        score += 1
-    else:
-        score -= 1
-
-    return score
+        return f"{symbol} {price:.2f} → SELL 📉 (AI Prediction)"
 
 
-# -------------------------
-# MAIN SIGNAL ENGINE
-# -------------------------
+# -----------------------------
+# MAIN FUNCTION
+# -----------------------------
 def get_signal(symbol):
     symbol = symbol.upper()
 
-    # ₿ CRYPTO
+    # Crypto
     if "BTC" in symbol:
-        price = get_crypto_price("BTCUSDT")
-        score = ai_score(price)
+        return predict_signal("BTC-USD")
 
-        if score >= 2:
-            return f"BTC {price} → STRONG BUY 📈 (AI Score: {score})"
-        elif score <= -1:
-            return f"BTC {price} → SELL 📉 (AI Score: {score})"
-        else:
-            return f"BTC {price} → HOLD ⏸ (AI Score: {score})"
-
-
-    # 💱 FOREX (simple simulated logic for now)
+    # Forex
     elif "EURUSD" in symbol:
-        score = 1
-        return f"EUR/USD → BUY 📈 (AI Score: {score})"
+        return predict_signal("EURUSD=X")
 
     elif "GBPUSD" in symbol:
-        score = -1
-        return f"GBP/USD → SELL 📉 (AI Score: {score})"
+        return predict_signal("GBPUSD=X")
 
-
-    # 🪙 GOLD
+    # Gold
     elif "XAU" in symbol or "GOLD" in symbol:
-        score = 0
-        return f"XAUUSD → HOLD ⏸ (AI Score: {score})"
-
+        return predict_signal("GC=F")
 
     else:
         return "Market not supported ❌"
